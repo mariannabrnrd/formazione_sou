@@ -169,12 +169,3 @@ nc -v -w 1 "$TARGET" "$PORT_MIN"
 * L'output di `nc` viene silenziato (`> /dev/null 2>&1`) per mostrare solo i risultati.
 * Lo script richiede che `netcat (nc)` sia installato sul sistema.
 
----
-
-## Possibili miglioramenti
-
-* Correggere la variabile `$PORT` (attualmente non definita) con `$PORT_MIN`
-* Aggiungere output colorato (verde = aperta, rosso = chiusa)
-* Supporto per scansione parallela per velocizzare il processo
-* Logging su file
-
