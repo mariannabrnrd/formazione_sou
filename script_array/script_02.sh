@@ -3,10 +3,14 @@
 ARRAY=()
 TMP=""
 i=1
+j=0
 
 #popolo il mio array
 while [ $i -le $# ]; do
-        ARRAY[$((i-1))]="${!i}"
+	for word in ${!i}; do
+        	ARRAY[$j]="$word"
+		((j++))
+	done
         ((i++))
 done
 
