@@ -1,0 +1,26 @@
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"
+
+  config.vm.define "ping" do |ping|
+    ping.vm.hostname = "ping"
+    ping.vm.network "forwarded_port", guest: 8080, host: 8080
+    ping.vm.provider "virtualbox" do |vb|
+      vb.name = "ping"
+      vb.memory = "1024"
+      vb.cpus = 1
+    end
+    ping.vm.provision "shell", path: "provision.sh"
+  end
+
+  config.vm.define "pong" do |pong|
+    pong.vm.hostname = "pong"
+    pong.vm.network "forwarded_port", guest:8080, host: 8081
+    pong.vm.provider "virtualbox" do |vb|
+      vb.name = "pong"
+      vb.memory = "1024"
+      vb.cpus = 1
+    end
+    pong.vm.provision "shell", path: "provision.sh"
+  end
+end
