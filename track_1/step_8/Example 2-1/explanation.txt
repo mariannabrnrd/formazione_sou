@@ -1,0 +1,17 @@
+Questo script serve a ripulire i file di log "messages" e "wtmp"
+senza eliminarli dal file system.
+
+(come specifica il commento, sono comandi che si possono eseguire
+solo con i privilegi di root, poichè i file si trovano nella directory
+protetta /var/log)
+
+Lo script prima si sposta nella cartella con cd /var/log.
+Successivamente, utilizza il comando cat per leggere il file speciale /dev/null
+(questo file ha una proprietà unica: è sempre vuoto. tutti i dati inviati a
+/dev/null vengono eliminati).
+
+Tramite l'operatore di redirezione del file descriptor (>), l'output vuoto 
+viene indirizzato nel file di destinazione. Questo sovrascrive il contenuto 
+precedente del log, azzerandone la dimensione, ma mantenendo intatti il file.
+
+Infine, il comando echo stampa un messaggio di conferma."

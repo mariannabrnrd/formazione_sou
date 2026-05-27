@@ -1,0 +1,37 @@
+Questo script ci insegna la regola fondamentale su quando
+usare o meno il simbolo $ davanti al nome di una variabile,
+mostrandoci 4 scenari diversi. La regola generale è: la
+variabile è 'nuda' (senza $) quando dobbiamo assegnarle un
+valore, mentre richiede il $ quando dobbiamo referenziarla 
+(cioè leggere il suo contenuto).
+
+Primo caso:
+All'inizio, quando si assegna un valore alla variabile a,
+non si usa il $. In questa fase Bash non ha bisogno di leggere
+il valore, ma deve solo scrivere o aggiornare lo spazio di
+memoria. Successivamente, nel comando echo, quando si deve
+stampare il valore a schermo, si usa il simbolo $, poiché Bash
+deve espandere la variabile e accedere al suo contenuto attuale.
+
+Secondo caso:
+Viene mostrato un altro tipo di assegnazione tramite il comando
+let, che permette di eseguire operazioni matematiche (in questo
+caso 16+5). Anche qui la variabile a rimane nuda perché il
+costrutto serve a calcolare un risultato e a memorizzarlo nella
+variabile, aggiornandola.
+
+Terzo caso:
+Nel ciclo for, la variabile a viene inserita senza $. Questo
+accade perché il ciclo agisce come un'assegnazione automatica:
+a ogni iterazione, Bash prende un valore dalla lista
+(7, 8, 9, 11) e lo scrive dentro a, modificandone il contenuto.
+Il $ ricompare invece all'interno del ciclo (echo -n "$a "),
+dove il valore corrente deve essere effettivamente letto e stampato.
+
+Quarto caso:
+Nell'ultima parte lo script mostra il comportamento con il
+comando read. Questo comando serve a ricevere un input da
+tastiera da parte dell'utente e a salvarlo nella variabile.
+Trattandosi a tutti gli effetti di una sovrascrittura di dati,
+la a si scrive senza $, che verrà poi riutilizzato solo alla
+fine per confermare (stampare) il valore inserito.

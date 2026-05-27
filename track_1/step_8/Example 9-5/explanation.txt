@@ -1,0 +1,20 @@
+Questo script mostra due metodi diversi per verificare se l'utente
+che lo esegue ha i privilegi di amministratore -> root. 
+Lo script si interrompe a metà con il comando exit 0, la seconda parte
+c'è solo per mostrare un metodo alternativo senza eseguirlo.
+
+Prima parte:
+Viene definita una variabile "ROOT_UID" impostata a 0 (poiché nei l'ID
+dell'utente root è sempre 0). Tramite la condizione if, lo script
+confronta questa variabile con la variabile d'ambiente di sistema $UID.
+Se i valori corrispondono, l'utente è root; in caso contrario, è un
+utente comune. Il risultato viene comunicato all'utente tramite il
+comando echo.
+
+Seconda parte:
+Questo blocco mostra come fare lo stesso controllo basandosi sul
+nome utente anziché sull'ID numerico. Imposta la variabile ROOTUSER_NAME
+con la stringa "root". Poi, utilizzando i backtick (`...`), esegue il
+comando "id -nu" (oppure whoami) e salva il suo output (cioè il nome
+dell'utente attuale) nella variabile username. Infine, con una seconda
+condizione if confronta le due stringhe per determinare l'identità dell'utente.

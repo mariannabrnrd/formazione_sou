@@ -1,0 +1,35 @@
+Questo script ci aiuta a imparare a gestire l'utilizzo degli
+argomenti come variabiali, passati da riga di comando.
+
+Il primo passaggio che esegue è di chiamare una variabile
+MINPARAMS a 10.
+Poi mostra due modi per per stampare il nome del programma, il
+primo metodo lo stampa come lo vediamo quando lo lanciamo 
+"./script" mentre il secondo metodo stampa solo il nome tagliando
+il percorso "script".
+
+Successivamente, lo script esegue una serie di controlli su ogni
+singolo argomento usando la condizione if [ -n "$1" ]. L'opzione
+-n serve a verificare se la stringa non è vuota. In pratica, 
+lo script controlla se il primo parametro esiste: se c'è, lo stampa
+a schermo; se non è stato passato, non fa nulla e passa oltre.
+Questo controllo viene ripetuto per i primi parametri.
+
+Un dettaglio tecnico molto importante si nota nel controllo del
+decimo parametro: if [ -n "${10}" ]. In Bash, per richiamare i
+parametri dal 10 in poi, è obbligatorio racchiudere il numero tra
+parentesi graffe.
+(Se avessimo scritto $10, Bash lo avrebbe interpretato
+come la variabile $1 seguita dal numero 0).
+
+Verso la fine, lo script utilizza due variabili speciali di Bash:
+"$*": che unisce e stampa tutti gli argomenti passati raggruppati
+in un'unica stringa.
+$#: che contiene il numero totale di argomenti ricevuti.
+
+Lo script usa l'operatore -lt ("minore di") per verificare se il
+numero totale di argomenti passati ($#) è minore di 10 ($MINPARAMS).
+Se l'utente ha inserito meno di 10 argomenti, lo script stampa un
+messaggio di avviso per segnalare che mancano dei parametri.
+Infine, termina con exit 0, indicando che l'esecuzione si è 
+conclusa con successo.
