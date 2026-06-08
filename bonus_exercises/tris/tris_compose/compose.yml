@@ -1,0 +1,72 @@
+services:
+  A1:
+    image: alpine
+    container_name: A1
+    volumes:
+      - ./A1:/app
+    command: sleep infinity
+    restart: unless-stopped
+
+  A2:
+    image: alpine
+    container_name: A2
+    volumes:
+      - ./A2:/app
+    command: sleep infinity
+    restart: unless-stopped
+
+  A3:
+    image: alpine
+    container_name: A3
+    volumes:
+      - ./A3:/app
+    command: sleep infinity
+    restart: unless-stopped
+
+  B1:
+    image: alpine
+    container_name: B1
+    volumes:
+      - ./B1:/app
+    command: sleep infinity
+    restart: unless-stopped
+
+  B2:
+    image: alpine
+    container_name: B2
+    volumes:
+      - ./B2:/app
+    command: sleep infinity
+    restart: unless-stopped
+
+  B3:
+    image: alpine
+    container_name: B3
+    volumes:
+      - ./B3:/app
+    command: sleep infinity
+    restart: unless-stopped
+
+  C1:
+    image: alpine
+    container_name: C1
+    volumes:
+      - ./C1:/app
+    command: sleep infinity
+    restart: unless-stopped
+
+  C2:
+    image: alpine
+    container_name: C2
+    volumes:
+      - ./C2:/app
+    command: sleep infinity
+    restart: unless-stopped
+
+  C3:
+    image: alpine
+    container_name: C3
+    volumes:
+      - ./C3:/app
+    command: sleep infinity
+    restart: unless-stopped
