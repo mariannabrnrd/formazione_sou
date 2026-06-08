@@ -1,0 +1,18 @@
+Questo script ci introduce gli array associativi.
+(non sono array semplici, ogni "casella" viene rinosciuta
+con un nome specifico).
+
+Per prima cosa per dichiarare un array associativo, bisogna
+usare il comando "declare -A", ogni qualvolta che vogliamo
+aggiungere una casella al nostro array, basta che inseriamo
+array[nome_casella]=... e bash assegnerà automaticamente quello
+che scriviamo dopo alla casella "nome_casella" di quello specifico
+array.
+
+La dimostrazione ci viene fatta poi con echo, quando viene
+stampato il valore di ogni specifica casella, unica accortezza
+in questo caso, per far si che bash prendi tutto il valore e non
+solo il primo pezzo dobbiamo usare le {} -> ${array[nome_casella]}
+
+Mentre come ultimo comando, non stampa tutti i valori all'interno
+dell'array associativo, ma solo gli indici dell'array.

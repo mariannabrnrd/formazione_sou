@@ -1,0 +1,23 @@
+Questo script mostra il funzionamento della variabile speciale
+$?, che memorizza l'exit status (il codice di uscita)
+dell'ultimo comando eseguito in ordine cronologico.
+Per convenzione, nei sistemi Unix, un codice pari a 0 indica
+il successo, mentre un valore diverso da 0 indica un errore.
+
+Primo blocco:
+Lo script esegue il comando echo hello, visto che l'operazione va
+a buon fine, il comando successivo echo $? stamperà a schermo 0.
+
+Secondo blocco:
+Viene inserita la stringa casuale lskdf. Trattandosi di un
+comando inesistente, il sistema genera un errore e imposta
+l'exit status a un valore diverso da zero (nello specifico,
+il codice standard 127 per i comandi non riconosciuti).
+Il successivo echo $? mostrerà quindi questo codice di errore.
+
+Terzo blocco:
+Lo script termina forzatamente con exit 113. Questo significa
+che l'intero script restituisce l'exit status 113 alla shell
+che lo ha lanciato. Una volta che lo script si è concluso, se
+l'utente digita nel proprio terminale il comando echo $?, potrà
+verificare che il valore restituito è proprio 113.
