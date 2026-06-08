@@ -1,0 +1,22 @@
+Vagrant.configure("2") do |config|
+
+  #Box Ubuntu
+  config.vm.box = "ubuntu/jammy64"
+
+  #Nome VM
+  config.vm.hostname = "tris"
+
+  #Risorse VM
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "tris"
+    vb.memory = 2048
+    vb.cpus = 2
+  end
+
+  #Cartella condivisa host -> VM (importante x container)
+  config.vm.synced_folder ".", "/home/vagrant/tris"
+
+  #Provisioning
+  config.vm.provision "shell", path: "provision.sh"
+
+end
