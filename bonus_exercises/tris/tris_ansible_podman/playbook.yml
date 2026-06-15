@@ -1,0 +1,80 @@
+---
+- name: Setup Tris con Podman (rootless) e Pod nativo
+  hosts: all
+  become: true
+
+  vars:
+    base_path: /home/vagrant/tris
+    cells:
+      - A1
+      - A2
+      - A3
+      - C1
+      - C2
+      - C3
+      - B1
+      - B2
+      - B3
+    pod_name: tris-pod
+
+  tasks:
+
+    - name: Installa Podman
+      apt:
+        name: podman
+        state: present
+        update_cache: yes
+
+    - name: Crea cartella per ogni cella
+      file:
+        path: "{{ base_path }}/{{ item }}"
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: "0755"
+      loop: "{{ cells }}"
+    
+    - name: Iniziallizzazione status.txt a EMPTY
+      copy:
+        content: "EMPTY"
+        dest: "{{ base_path }}/{{ item }}/status.txt"
+        force: no
+        owner: vagrant
+        group: vagrant
+      loop: "{{ cells }}"
+
+    - name: Abilita lingering per persistenza Podman rootless
+      command: loginctl enable-linger vagrant
+
+    - name: Configurazione ed esecuzione dei container rootless
+      become_user: vagrant
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/1000"
+      block:
+
+      - name: Rimuovi il pod se esiste già
+        shell: podman pod rm -f {{ pod_name }} 2>/dev/null || true
+      
+
+      - name: Crea il pod tris-pod
+        shell: podman pod create --name {{ pod_name }}
+        
+      - name: Avvia container per ogni cella dentro il pod
+        shell: >
+          podman run -d
+          --pod {{ pod_name }}
+          --name {{ item }}
+          -v {{ base_path }}/{{ item }}:/app:Z
+          alpine sleep infinity
+        loop: "{{ cells }}"
+      
+      - name: Avvia effettivamente il Pod e tutti i container del Tris
+        shell: podman pod start {{ pod_name }}
+
+      - name: Mostra lo stato del pod e dei container
+        shell: podman pod ps && echo "---" && podman ps --pod
+        register: pod_status
+
+      - name: Stampa lo stato
+        debug:
+          msg: "{{ pod_status.stdout_lines }}"

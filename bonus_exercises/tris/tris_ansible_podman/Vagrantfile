@@ -1,0 +1,24 @@
+
+Vagrant.configure("2") do |config|
+  
+  # VM Ubuntu
+  config.vm.box = "ubuntu/jammy64"
+  config.vm.hostname = "tris"
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "tris"
+    vb.memory = "2048"
+    vb.cpus = 2
+  end
+
+  # Cartella condivisa host -> VM
+  config.vm.synced_folder ".", "/home/vagrant/tris"
+
+  # Configurazione Ansible
+  config.vm.provision "ansible_local" do |ansible|
+    ansible.playbook = "playbook.yml"
+    ansible.inventory_path = "inventory.yml"
+    ansible.install = true
+    ansible.provisioning_path = "/home/vagrant/tris"
+    ansible.limit = "all"
+  end
+end
