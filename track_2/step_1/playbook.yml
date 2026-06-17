@@ -1,0 +1,61 @@
+---
+- name: Setup Jenkins su Rocky Linux
+  hosts: all
+  become: true
+
+  vars:
+    jenkins_network: "jenkins_network"
+    jenkins_master_name: "jenkins_master"
+    jenkins_agent_name: "jenkins_agent_01"
+    jenkins_url: "http://10.89.0.2:8080"
+    jenkins_secret: "f2957ef576d6527464fa80a47cbfa4dff22ba5ea533bbd4dc9a87cb3d087f6e4"
+
+  tasks:
+    - name: Installa Podman
+      ansible.builtin.dnf:
+        name: podman
+        state: present
+
+    - name: Crea rete Podman per Jenkins
+      containers.podman.podman_network:
+        name: "{{ jenkins_network }}"
+        subnet: "10.89.0.0/24"
+        gateway: "10.89.0.1"
+        state: present
+
+    - name: Avvia container Jenkins jenkins_master
+      containers.podman.podman_container:
+        name: "{{ jenkins_master_name }}"
+        image: docker.io/jenkins/jenkins:lts
+        state: started
+        network: "{{ jenkins_network }}"
+        ip: 10.89.0.2
+        ports:
+          - "8080:8080"
+          - "50000:50000"
+        volumes:
+          - "jenkins_master_data:/var/jenkins_home"
+
+    - name: Attendi che Jenkins Master sia online
+      ansible.builtin.uri:
+        url: "{{ jenkins_url }}/login"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 5
+
+    - name: Avvia container Jenkins Agent (Inbound Agent con WebSocket)
+      containers.podman.podman_container:
+        name: "jenkins_agent"
+        image: docker.io/jenkins/inbound-agent:latest
+        state: started
+        network: "{{ jenkins_network }}"
+        recreate: true
+        volumes:
+          - "jenkins_agent_data:/home/jenkins/agent"
+        env:
+          JENKINS_URL: "{{ jenkins_url }}"
+          JENKINS_AGENT_NAME: "{{ jenkins_agent_name }}"
+          JENKINS_SECRET: "{{ jenkins_secret }}"
+          JENKINS_WEB_SOCKET: "true"
