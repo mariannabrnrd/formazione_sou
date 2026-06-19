@@ -1,0 +1,25 @@
+pipeline {
+    agent any
+    stages {
+        stage('Check Giorno') {
+            steps {
+                script {
+                    def oggi = new Date()
+                    def giorno = oggi.day
+                    if (giorno == 0 || giorno == 6 ) {
+                        echo "WARNING: Oggi è sabato o domenica. La build non verrà eseguita."
+                        currentBuild.result = 'ABORTED'
+                        error("Build disabilitata nel weekend.")
+                    } else {
+                        echo "Giorno feriale. Avvio build..."
+                    }
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                echo "Build in esecuzione!"
+            }
+        }
+    }
+}
