@@ -1,0 +1,11 @@
+---
+- name: Esercizio Ansible Vault con vars_files
+  hosts: ex-bonus-ansible
+  gather_facts: false
+  vars_files:
+    - secret_vars.yml
+
+  tasks:
+    - name: Stampa il valore delle variabili contenute nel vault 
+      debug:
+        msg: "var_name = {{ var_name }} | secret = {{ secret }}"
