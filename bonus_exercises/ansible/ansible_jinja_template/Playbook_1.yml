@@ -1,0 +1,20 @@
+---
+- name: Esercizio Append /etc/security/limits.conf
+  hosts: bonus-ansible-03
+  gather_facts: false
+
+  tasks:
+    - name: Generazione file da template
+      ansible.builtin.template:
+        src: limits.conf.j2
+        dest: /tmp/output.txt
+      delegate_to: localhost
+      become: false
+
+    - name: Append su limits.conf
+      ansible.builtin.blockinfile:
+        path: /etc/security/limits.conf
+        block: "{{ lookup('ansible.builtin.file', '/tmp/output.txt') }}"
+        insertafter: EOF
+        create: yes
+      become: true

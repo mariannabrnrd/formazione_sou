@@ -1,0 +1,24 @@
+---
+- name: Esercizio users in /etc/security/access.conf
+  hosts: bonus-ansible-03
+  gather_facts: false
+  vars:
+    users:
+      - mario
+      - giulia
+      - luigi
+  tasks:
+    - name: Generazione file da template
+      ansible.builtin.template:
+        src: access.conf.j2
+        dest: /tmp/output.txt
+      delegate_to: localhost
+      become: false
+
+    - name: Inserimento utenti in access.conf
+      ansible.builtin.blockinfile:
+        path: /etc/security/access.conf
+        block: "{{ lookup('ansible.builtin.file', '/tmp/output.txt') }}"
+        insertbefore: '- : ALL : ALL'
+        create: yes
+      become: true
