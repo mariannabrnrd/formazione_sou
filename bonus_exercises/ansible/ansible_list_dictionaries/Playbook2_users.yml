@@ -1,0 +1,32 @@
+---
+- name: Esercizio Ansible con liste e dizionari
+  hosts: bonus-ansible-02
+  gather_facts: false
+  become: true
+  
+  vars:
+    users:
+      - name: mario
+        group: developers
+        shell: /bin/bash
+        home: /home/mario
+      - name: giulia
+        group: admins
+        shell: /bin/zsh
+        home: /home/giulia
+
+  tasks:
+    - name: Creazione dei gruppi
+      ansible.builtin.group:
+        name: "{{ item.group }}"
+        state: present
+      loop: "{{ users }}"
+
+    - name: Creazione degli utenti
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        group: "{{ item.group }}"
+        shell: "{{ item.shell }}"
+        home: "{{ item.home }}"
+        state: present
+      loop: "{{ users }}"

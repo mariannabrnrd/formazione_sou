@@ -1,0 +1,19 @@
+---
+- name: Esercizio Ansible con liste e dizionari
+  hosts: bonus-ansible-02
+  gather_facts: false
+  become: true
+
+  vars:
+    packages:
+      vim: present
+      curl: present
+      htop: present
+      nano: absent
+
+  tasks:
+    - name: Gestione dei pacchetti
+      ansible.builtin.package:
+        name: "{{ item.key }}"
+        state: "{{ item.value }}"
+      loop: "{{ packages | dict2items }}"
