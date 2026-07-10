@@ -35,6 +35,7 @@
           - "50000:50000"
         volumes:
           - "jenkins_master_data:/var/jenkins_home"
+        restart_policy: always
 
     - name: Attendi che Jenkins Master sia online
       ansible.builtin.uri:
@@ -45,13 +46,23 @@
       retries: 30
       delay: 5
 
-    - name: Avvia container Jenkins Agent (Inbound Agent con WebSocket)
+    - name: Build immagine Jenkins Agent con Podman
+      containers.podman.podman_image:
+        name: jenkins-agent-podman
+        path: /home/vagrant/project
+        build:
+          file: /home/vagrant/project/Dockerfile.agent
+        state: build
+
+    - name: Avvia container Jenkins Agent
       containers.podman.podman_container:
-        name: "jenkins_agent"
-        image: docker.io/jenkins/inbound-agent:latest
+        name: "{{ jenkins_agent_name }}"
+        image: localhost/jenkins-agent-podman:latest
         state: started
         network: "{{ jenkins_network }}"
         recreate: true
+        privileged: true
+        restart_policy: always
         volumes:
           - "jenkins_agent_data:/home/jenkins/agent"
         env:
