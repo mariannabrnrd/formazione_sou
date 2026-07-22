@@ -1,5 +1,3 @@
----
-
 ## Prerequisiti
 
 - Docker Desktop installato e in esecuzione
