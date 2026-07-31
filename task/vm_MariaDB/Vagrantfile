@@ -1,0 +1,26 @@
+Vagrant.configure("2") do |config|
+
+  config.vm.box = "generic/rocky9"
+
+  #VM1: database di origine
+  config.vm.define "db_source" do |source|
+    source.vm.hostname = "db-source"
+    source.vm.network "private_network", ip: "192.168.56.10"
+    source.vm.provider "virtualbox" do |vb|
+      vb.memory = "1024"
+      vb.cpus = 1
+      vb.name = "Rocky9-dbsource"
+    end
+  end
+
+  #VM2: database di destinazione
+  config.vm.define "db_dest" do |dest|
+    dest.vm.hostname = "db-dest"
+    dest.vm.network "private_network", ip: "192.168.56.11"
+    dest.vm.provider "virtualbox" do |vb|
+      vb.memory = "1024"
+      vb.cpus = 1
+      vb.name = "Rocky9-dbdest"
+    end
+  end
+end

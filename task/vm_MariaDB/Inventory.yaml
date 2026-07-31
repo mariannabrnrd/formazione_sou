@@ -1,0 +1,16 @@
+all:
+  children:
+    db_source:
+      hosts:
+        db-source:
+          ansible_host: 192.168.56.10
+          ansible_user: vagrant
+
+    db_dest:
+      hosts:
+        db-dest:
+          ansible_host: 192.168.56.11
+          ansible_user: vagrant
+
+  vars:
+    ansible_python_interpreter: /usr/bin/python3.9

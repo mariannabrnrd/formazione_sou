@@ -1,0 +1,156 @@
+---
+# PLAY 1 - lavoro sulla prima vm
+- name: Setup MariaDB su db_source e backup
+  hosts: db_source
+  become: true
+  vars_files:
+    - group_vars/all/vars.yml
+  vars:
+    anible_python_interpreter: /usr/bin/python3.9
+
+  tasks:
+    - name: Installazione MariaDB server e client
+      ansible.builtin.dnf:
+        name:
+          - mariadb-server
+          - mariadb
+        state: present
+
+    # richiesto dai moduli community.mysql
+    - name: Installa PyMySQL
+      ansible.builtin.dnf:
+        name: python3-PyMySQL
+        state: present
+
+    - name: Avvia e abilita il servizio MariaDB
+      ansible.builtin.systemd:
+        name: mariadb
+        state: started
+        enabled: true
+
+    - name: Crea il database
+      community.mysql.mysql_db:
+        name: "{{ db_name }}"
+        state: present
+        login_user: root
+        login_unix_socket: /var/lib/mysql/mysql.sock
+
+    - name: Crea l'utente applicativo con privilegi
+      community.mysql.mysql_user:
+        name: "{{ vault_db_user }}"
+        password: "{{ vault_db_password }}"
+        priv: "{{ db_name }}.*:ALL"
+        host: localhost
+        state: present
+        login_user: root
+        login_unix_socket: /var/lib/mysql/mysql.sock
+
+    # idempotente
+    - name: Crea la tabella clienti
+      community.mysql.mysql_query:
+        login_db: "{{ db_name }}"
+        login_user: root
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        query: "SELECT COUNT(*) AS cnt FROM {{ db_table }}"
+      register: row_count
+
+    # solo se la tabella è vuota
+    - name: Inserisci dati di test
+      community.mysql.mysql_query:
+        login_db: "{{ db_name }}"
+        login_user: root
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        query: >
+          INSERT INTO {{ db_table }} (nome, email) VALUES
+          ('Mario Rossi', 'mario@test.it'),
+          ('Luca Bianchi', 'luca@test.it'),
+          ('Giulia Verdi', 'giulia@test.it')
+      when: row_count.query_result[0][0].cnt == 0
+
+    - name: Esegui il backup con mysqldump
+      ansible.builtin.command: >
+        mysqldump -u {{ vault_db_user }} --databases {{ db_name }} --result-file={{ backup_path }}
+      environment:
+        MYSQL_PWD: "{{ vault_db_password }}"
+      changed_when: true
+      no_log: true
+
+    - name: Recupera il file di backup sul controller
+      ansible.builtin.fetch:
+        src: "{{ backup_path }}"
+        dest: "/tmp/{{ db_name }}_backup.sql"
+        flat: true
+
+# Play 2 - lavoro sulla seconda vm
+- name: Setup MariaDB su db_dest e restore
+  hosts: db_dest
+  become: true
+  vars_files:
+    - group_vars/all/vars.yml
+  vars:
+    ansible_python_interpreter: /usr/bin/python3.9
+
+  tasks:
+    - name: Installa MariaDB server e client
+      ansible.builtin.dnf:
+        name:
+          - mariadb-server
+          - mariadb
+        state: present
+
+    - name: Installa PyMySQL
+      ansible.builtin.dnf:
+        name: python3-PyMySQL
+        state: present
+
+    - name: Avvia e abilita il servizio mariadb
+      ansible.builtin.systemd:
+        name: mariadb
+        state: started
+        enabled: true
+
+    - name: Crea l'utente applicativo con privilegi
+      community.mysql.mysql_user:
+        name: "{{ vault_db_user }}"
+        password: "{{ vault_db_password }}"
+        priv: "{{ db_name }}.*:ALL"
+        host: localhost
+        state: present
+        login_user: root
+        login_unix_socket: /var/lib/mysql/mysql.sock
+
+    - name: Copia il file di backup dal controller a db_dest
+      ansible.builtin.copy:
+        src: "/tmp/{{ db_name }}_backup.sql"
+        dest: "{{ backup_path }}"
+
+    # crea anche il DB se non esiste
+    - name: Restore del database dal dump
+      community.mysql.mysql_db:
+        name: "{{ db_name }}"
+        state: import
+        target: "{{ backup_path }}"
+        login_user: root
+        login_unix_socket: /var/lib/mysql/mysql.sock
+
+    - name: Verifica conteggio righe dopo restore
+      community.mysql.mysql_query:
+        login_db: "{{ db_name }}"
+        login_user: root
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        query: "SELECT COUNT(*) AS cnt FROM {{ db_table }}"
+      register: dest_count
+
+    - name: Verifica checksum tabella dopo restore
+      community.mysql.mysql_query:
+        login_db: "{{ db_name }}"
+        login_user: root
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        query: "CHECKSUM TABLE {{ db_table }}"
+      register: dest_checksum
+
+    - name: Mostra risultato verifica
+      ansible.builtin.debug:
+        msg:
+          - "Righe in {{ db_table }}: {{ dest_count.query_result[0][0].cnt }}"
+          - "Checksum: {{ dest_checksum.query_result[0][0].Checksum }}"

@@ -1,0 +1,3 @@
+db_name: testdb
+db_table: clienti
+backup_path: /home/vagrant/testdb_backup.sql
