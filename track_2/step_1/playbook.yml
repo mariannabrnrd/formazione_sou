@@ -8,7 +8,7 @@
     jenkins_master_name: "jenkins_master"
     jenkins_agent_name: "jenkins_agent_01"
     jenkins_url: "http://10.89.0.2:8080"
-    jenkins_secret: "f2957ef576d6527464fa80a47cbfa4dff22ba5ea533bbd4dc9a87cb3d087f6e4"
+    jenkins_secret: "28dd5e851caa6cae1b5786f38f3dc1e4c70072daf540805791dea06febcea195"
 
   tasks:
     - name: Installa Podman
