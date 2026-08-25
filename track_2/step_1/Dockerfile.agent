@@ -3,7 +3,13 @@ FROM docker.io/jenkins/inbound-agent:latest
 USER root
 
 RUN apt-get update && \
-    apt-get install -y podman && \
+    apt-get install -y curl podman && \
     rm -rf /var/lib/apt/lists/*
+
+# Copia kubectl e helm già scaricati
+COPY kubectl /usr/local/bin/kubectl
+COPY linux-amd64/helm /usr/local/bin/helm
+
+RUN chmod +x /usr/local/bin/kubectl /usr/local/bin/helm
 
 USER jenkins
