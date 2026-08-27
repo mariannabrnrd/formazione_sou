@@ -332,7 +332,7 @@ Il Pod viene reschedulo su un altro nodo disponibile. Il PVC (su Ceph) è access
 ### Eliminazione accidentale del Pod
 Stesso comportamento del caso precedente — il StatefulSet ricrea il Pod che rimonta il suo PVC.
 
-### Eliminazione del PVC (⚠️ irreversibile con policy Delete)
+### Eliminazione del PVC (irreversibile con policy Delete)
 Il PV e tutti i dati vengono eliminati. Il Pod che prova a ripartire trova un volume vuoto e si unisce al cluster come nodo nuovo, sincronizzando i dati dagli altri nodi tramite peer discovery. **I messaggi non replicati su altri nodi vengono persi.**
 
 ### Eliminazione dell'intero RabbitmqCluster
