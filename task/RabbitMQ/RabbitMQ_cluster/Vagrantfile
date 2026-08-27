@@ -1,0 +1,36 @@
+Vagrant.configure("2") do |config|
+
+  config.vm.box = "debian/bookworm64" #Debian12
+
+  nodes = [
+    { name: "rabbitmq-node1", ip: "192.168.56.11" },
+    { name: "rabbitmq-node2", ip: "192.168.56.12" },
+    { name: "rabbitmq-node3", ip: "192.168.56.13" },
+  ]
+
+  nodes.each do |node|
+    config.vm.define node[:name] do |vm|
+      vm.vm.hostname = node[:name]
+      vm.vm.network "private_network", ip: node[:ip]
+
+      vm.vm.provider "virtualbox" do |vb|
+        vb.memory = 2048
+        vb.cpus = 2
+        vb.name = node[:name]
+      end
+
+      #eseguito su tutti i nodi
+      vm.vm.provision "shell", path: "scripts/install_rabbitmq.sh"
+
+      #solo node1 inizializza il cluster
+      if node[:name] == "rabbitmq-node1"
+        vm.vm.provision "shell", path: "scripts/init_node1.sh"
+      end
+
+      #node2 e node3 fanno il join
+      if node[:name] != "rabbitmq-node1"
+        vm.vm.provision "shell", path: "scripts/join_cluster.sh"
+      end
+    end
+  end
+end

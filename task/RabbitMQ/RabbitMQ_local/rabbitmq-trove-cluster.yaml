@@ -1,0 +1,49 @@
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: trove-rabbitmq
+  namespace: trove-messaging
+  annotations:
+    rabbitmq.com/legacy-startup-probe: "true"
+spec:
+  replicas: 3
+  image: rabbitmq:4.1-management
+  service:  #parte di rete
+    type: NodePort
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+  persistence:
+    storageClassName: standard #ceph-rbd
+    storage: 10Gi
+  rabbitmq:
+    additionalConfig: |
+      default_queue_type = quorum
+      channel_max = 2047
+      heartbeat = 60
+      cluster_formation.peer_discovery_backend = rabbit_peer_discovery_k8s
+      cluster_formation.k8s.host = kubernetes.default.svc.cluster.local
+      cluster_formation.k8s.address_type = hostname
+      cluster_formation.node_cleanup.interval = 30
+      cluster_formation.node_cleanup.only_log_warning = true
+  override:
+    statefulSet:
+      spec:
+        template:
+          spec:
+            containers:   #aggiunta
+              - name: rabbitmq
+            affinity:
+              podAntiAffinity:
+                requiredDuringSchedulingIgnoredDuringExecution: #forse da cambiare in -> preferredDuringSchedulingIgnoredDuringExecution ????
+                  - labelSelector:
+                      matchExpressions:
+                        - key: app.kubernetes.io/name
+                          operator: In
+                          values:
+                            - trove-rabbitmq
+                    topologyKey: kubernetes.io/hostname
