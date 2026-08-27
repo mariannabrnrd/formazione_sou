@@ -358,6 +358,12 @@ kubectl get rabbitmqcluster -n trove-messaging
 
 # Dettagli della risorsa
 kubectl describe rabbitmqcluster trove-rabbitmq -n trove-messaging
+
+# Verifica i PersistentVolumeClaim
+kubectl get pvc -n trove-messaging
+
+# Verifica il Service
+kubectl get svc -n trove-messaging
 ```
 
 ### Step 3 — Verifica il cluster
@@ -378,3 +384,108 @@ kubectl port-forward -n trove-messaging svc/trove-rabbitmq 15672:15672 &
 `rabbitmqctl cluster_status` conferma che i 3 nodi si sono uniti correttamente allo stesso cluster (sezione `Running Nodes`). Le credenziali del secret `trove-rabbitmq-default-user` sono generate automaticamente dall'Operator alla creazione del cluster e permettono un primo accesso di verifica, sia da CLI che dalla Management UI.
 
 ---
+
+### Step 4 — Crea vhost e utenti dedicati
+
+L'idea iniziale prevedeva un solo utente applicativo (`trove_guest`) con permessi limitati sul vhost di default `/`, oppure in alternativa un unico vhost dedicato `trove`. In fase di configurazione si è invece optato per un **isolamento**, creando un vhost dedicato — con relativo utente omonimo — per ciascuna sede: `trove-roma` e `trove-milano`. Ogni utente ha permessi completi solo sul proprio vhost, che resta isolato dagli altri.
+
+```bash
+# Vhost e utente "trove-roma"
+kubectl exec -n trove-messaging trove-rabbitmq-server-0 -- \
+  rabbitmqctl add_vhost trove-roma
+kubectl exec -n trove-messaging trove-rabbitmq-server-0 -- \
+  rabbitmqctl add_user trove-roma <PASSWORD-SICURA>
+kubectl exec -n trove-messaging trove-rabbitmq-server-0 -- \
+  rabbitmqctl set_permissions -p trove-roma trove-roma ".*" ".*" ".*"
+
+# Vhost e utente "trove-milano"
+kubectl exec -n trove-messaging trove-rabbitmq-server-0 -- \
+  rabbitmqctl add_vhost trove-milano
+kubectl exec -n trove-messaging trove-rabbitmq-server-0 -- \
+  rabbitmqctl add_user trove-milano <PASSWORD-SICURA>
+kubectl exec -n trove-messaging trove-rabbitmq-server-0 -- \
+  rabbitmqctl set_permissions -p trove-milano trove-milano ".*" ".*" ".*"
+```
+
+---
+
+### Verifica
+
+```bash
+kubectl exec -n trove-messaging trove-rabbitmq-server-0 -- rabbitmqctl list_users
+kubectl exec -n trove-messaging trove-rabbitmq-server-0 -- rabbitmqctl list_vhosts
+```
+
+Output atteso:
+
+```
+# list_users
+user                              tags
+default_user_Zcm1ysisBFOvU6KkDur  [administrator]
+trove-roma                        []
+trove-milano                      []
+
+# list_vhosts
+name
+trove-roma
+trove-milano
+/
+```
+
+L'utente `default_user_...` con tag `[administrator]` è quello generato automaticamente dall'Operator (le stesse credenziali recuperate allo Step 3) e va usato solo per amministrazione, non dalle applicazioni. Il vhost `/` resta quello di default di RabbitMQ, non utilizzato dall'applicazione Trove.
+
+---
+
+## Esporre RabbitMQ alle VM Trove — la parte di rete
+
+### Il problema
+
+Le VM di Trove si trovano su una rete diversa. RabbitMQ invece gira dentro Kubernetes e ha un indirizzo IP visibile solo all'interno del cluster (ClusterIP). Le VM non riescono a raggiungere quell'indirizzo, perché sono su due reti separate che di norma non comunicano tra loro.
+
+
+### Soluzione - NodePort
+
+La soluzione adottata espone RabbitMQ come `NodePort`, pubblicando la porta AMQP su un IP dei nodi worker K8s, raggiungibile dalle VM:
+
+```yaml
+override:
+    service:
+      spec:
+        type: NodePort
+        ports:
+          - name: amqp
+            port: 5672
+            targetPort: 5672
+            nodePort: 30672
+```
+
+Questa configurazione è già presente nel manifest `rabbitmq-trove-cluster.yaml` riportato in precedenza. Con `type: NodePort`, Kubernetes apre la porta `30672` su **ogni nodo worker** del cluster: una VM Trove può quindi connettersi a RabbitMQ puntando all'IP di un qualsiasi nodo worker sulla porta `30672`, senza dover attraversare la rete overlay di Kubernetes.
+
+---
+
+### Verifica del NodePort
+
+Prima di tutto controlla che il Service sia effettivamente di tipo NodePort e su quale porta è stato assegnato:
+
+```bash
+kubectl get svc -n trove-messaging trove-rabbitmq
+```
+
+Output atteso (colonna PORT(S) mostra la porta interna e quella NodePort assegnata):
+
+```bash
+NAME             TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+trove-rabbitmq   NodePort   10.96.123.45    <none>        5672:30672/TCP   10m
+```
+
+Poi recupera l'IP di uno dei nodi worker, che sarà la parte "esterna" dell'endpoint:
+
+```bash
+kubectl get nodes -o wide
+```
+
+Dall'output prendi la colonna INTERNAL-IP di uno dei worker di RabbitMQ.
+L'endpoint finale da usare nella connection string delle VM Trove sarà quindi:
+```bash
+<IP-NODO-WORKER>:30672
+```
