@@ -1,179 +1,57 @@
 # Documentazione Tecnica — RabbitMQ Cluster Operator su Kubernetes
 
-## Installazione del Cluster Operator
+## Indice
+
+1. [Introduzione](#1-introduzione)
+2. [Installazione del Cluster Operator](#2-installazione-del-cluster-operator)
+3. [Deploy del cluster RabbitMQ](#3-deploy-del-cluster-rabbitmq)
+4. [Configurazione dettagliata del manifest](#4-configurazione-dettagliata-del-manifest)
+5. [Verifica del deploy](#5-verifica-del-deploy)
+6. [Creazione di vhost e utenti dedicati](#6-creazione-di-vhost-e-utenti-dedicati)
+7. [Esporre RabbitMQ alle VM Trove](#7-esporre-rabbitmq-alle-vm-trove)
+
+---
+
+## 1. Introduzione
+
+RabbitMQ viene deployato su Kubernetes perché Trove (il servizio OpenStack per il Database as a Service) utilizza un sistema di code di messaggi per coordinare le comunicazioni tra il suo componente di controllo (trove-conductor) e gli agenti che girano sulle VM dei database (trove-guestagent). Ogni operazione — creare un database, fare un backup, scalare un'istanza — viene inviata come messaggio sulla coda e l'agente sulla VM la esegue in modo asincrono.
+
+Deployarlo su Kubernetes permette di gestirlo come un servizio infrastrutturale stabile, con alta disponibilità garantita dai 3 nodi, storage persistente tramite Ceph e ciclo di vita gestito dall'Operator.
+
+
+---
+
+## 2. Installazione del Cluster Operator
 
 Il Cluster Operator viene installato applicando il manifest ufficiale rilasciato da RabbitMQ. Il manifest crea automaticamente:
 
 - Il namespace `rabbitmq-system`
 - Le Custom Resource Definitions (CRD) — tra cui `RabbitmqCluster`
 - Il ServiceAccount, ClusterRole e ClusterRoleBinding necessari
-- Il Deployment dell'operator
+- Il Deployment dell'Operator
 
 ```bash
-kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/download/v2.16.1/cluster-operator.yml
+kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml
 ```
 
 ### Verifica installazione
 
 ```bash
-# Verifica che il namespace sia stato creato
-kubectl get ns
-
-# Verifica che il pod dell'operator sia in esecuzione
 kubectl get pods -n rabbitmq-system
 ```
 
 Output atteso:
 
 ```
-NAME                                        READY   STATUS    RESTARTS   AGE
-rabbitmq-cluster-operator-76d998c6dd-78x4j  1/1     Running   0          2m
+NAME                                         READY   STATUS    RESTARTS   AGE
+rabbitmq-cluster-operator-76d998c6dd-78x4j   1/1     Running   0          2m
 ```
 
 ---
 
-## Troubleshooting — ImageInspectError
+## 3. Deploy del cluster RabbitMQ
 
-### Problema riscontrato
-
-Dopo l'installazione il pod dell'operator rimaneva in stato `ImageInspectError`. Ispezionando il pod:
-
-```bash
-kubectl describe pod -n rabbitmq-system rabbitmq-cluster-operator-76d998c6dd-78x4j
-```
-
-L'output mostrava il seguente errore negli Events:
-
-```
-Warning  InspectFailed  kubelet  Failed to inspect image "": rpc error: code = Unknown
-desc = short-name "rabbitmqoperator/cluster-operator:2.16.1" did not resolve to an
-alias and no unqualified-search registries are defined in
-"/etc/containers/registries.conf.d/01-unqualified.conf"
-
-Warning  Failed  kubelet  Error: ImageInspectError
-```
-
-### Causa
-
-Il cluster Kubernetes aziendale utilizza un runtime container (probabilmente **CRI-O**) che non risolve automaticamente i **short name** delle immagini — cioè nomi senza il registry esplicito come `docker.io/` davanti.
-
-Il manifest ufficiale di RabbitMQ specifica l'immagine come:
-
-```
-rabbitmqoperator/cluster-operator:2.16.1
-```
-
-Senza il prefisso `docker.io/`, il runtime non sa da quale registry scaricarla e fallisce.
-
-### Soluzione
-
-Esportare il Deployment dell'operator in un file YAML, modificare il campo `image` aggiungendo il registry esplicito `docker.io/`, e riapplicare il manifest modificato.
-
----
-
-## Fix del Deployment
-
-### Step 1 — Esporta il Deployment
-
-```bash
-kubectl get deployment rabbitmq-cluster-operator -n rabbitmq-system -o yaml > deployment.yaml
-```
-
-### Step 2 — Modifica il campo image
-
-Nel file `deployment.yaml`, nella sezione `spec.template.spec.containers`, modificare il campo `image`:
-
-```yaml
-# Prima (causava ImageInspectError)
-image: rabbitmqoperator/cluster-operator:2.16.1
-
-# Dopo (registry esplicito)
-image: docker.io/rabbitmqoperator/cluster-operator:2.16.1
-```
-
-### Step 3 — Riapplica il Deployment modificato
-
-```bash
-kubectl apply -f deployment.yaml -n rabbitmq-system
-```
-
-### Step 4 — Verifica
-
-```bash
-kubectl get pods -n rabbitmq-system
-```
-
-Il pod deve passare in stato `Running` con `READY 1/1`.
-
-### deployment.yaml completo
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: rabbitmq-cluster-operator
-  namespace: rabbitmq-system
-  labels:
-    app.kubernetes.io/component: rabbitmq-operator
-    app.kubernetes.io/name: rabbitmq-cluster-operator
-    app.kubernetes.io/part-of: rabbitmq
-spec:
-  replicas: 1
-  revisionHistoryLimit: 10
-  progressDeadlineSeconds: 600
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: rabbitmq-cluster-operator
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/component: rabbitmq-operator
-        app.kubernetes.io/name: rabbitmq-cluster-operator
-        app.kubernetes.io/part-of: rabbitmq
-    spec:
-      serviceAccountName: rabbitmq-cluster-operator
-      terminationGracePeriodSeconds: 10
-      containers:
-        - name: operator
-          image: docker.io/rabbitmqoperator/cluster-operator:2.16.1
-          imagePullPolicy: IfNotPresent
-          command:
-            - /manager
-          env:
-            - name: OPERATOR_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: metadata.namespace
-          ports:
-            - name: metrics
-              containerPort: 9782
-              protocol: TCP
-          resources:
-            limits:
-              cpu: 200m
-              memory: 500Mi
-            requests:
-              cpu: 200m
-              memory: 500Mi
-          terminationMessagePath: /dev/termination-log
-          terminationMessagePolicy: File
-      dnsPolicy: ClusterFirst
-      restartPolicy: Always
-      schedulerName: default-scheduler
-      securityContext: {}
-```
-
----
-
-## Deploy del cluster RabbitMQ
-
-Con l'operator in esecuzione, il cluster RabbitMQ viene creato applicando una risorsa `RabbitmqCluster` — una Custom Resource Definition introdotta dall'operator stesso.
+Con l'Operator in esecuzione, il cluster RabbitMQ viene creato applicando una risorsa `RabbitmqCluster` — una Custom Resource Definition introdotta dall'Operator stesso. Quando viene applicata, l'Operator la intercetta tramite il suo Control Loop e crea automaticamente tutta l'infrastruttura necessaria: StatefulSet, Service, Secret, ConfigMap e RoleBinding.
 
 ### Step 1 — Crea il namespace applicativo
 
@@ -181,7 +59,7 @@ Con l'operator in esecuzione, il cluster RabbitMQ viene creato applicando una ri
 kubectl create namespace trove-messaging
 ```
 
-Il namespace `trove-messaging` ospita il cluster RabbitMQ dedicato all'applicazione Trove, separato dal namespace `rabbitmq-system` che contiene solo l'operator.
+Il namespace `trove-messaging` ospita il cluster RabbitMQ dedicato all'applicazione Trove, separato dal namespace `rabbitmq-system` che contiene solo l'Operator.
 
 ### Step 2 — Applica il manifest RabbitmqCluster
 
@@ -189,7 +67,7 @@ Il namespace `trove-messaging` ospita il cluster RabbitMQ dedicato all'applicazi
 kubectl apply -f rabbitmq-trove-cluster.yaml
 ```
 
-### rabbitmq-trove-cluster.yaml completo
+### rabbitmq-trove-cluster.yaml
 
 ```yaml
 apiVersion: rabbitmq.com/v1beta1
@@ -199,7 +77,7 @@ metadata:
   namespace: trove-messaging
 spec:
   replicas: 3
-  image: docker.io/library/rabbitmq:4.1.3-management
+  image: rabbitmq:4.1-management
 
   resources:
     requests:
@@ -239,125 +117,44 @@ spec:
           spec:
             containers:
               - name: rabbitmq
-                affinity:
-                  podAntiAffinity:
-                    requiredDuringSchedulingIgnoredDuringExecution:
-                      - labelSelector:
-                          matchExpressions:
-                            - key: app.kubernetes.io/name
-                              operator: In
-                              values:
-                                - trove-rabbitmq
-                        topologyKey: kubernetes.io/hostname
+            affinity:
+              podAntiAffinity:
+                requiredDuringSchedulingIgnoredDuringExecution:
+                  - labelSelector:
+                      matchExpressions:
+                        - key: app.kubernetes.io/name
+                          operator: In
+                          values:
+                            - trove-rabbitmq
+                    topologyKey: kubernetes.io/hostname
 ```
 
 ---
 
-## Configurazione dettagliata
+## 5. Verifica del deploy
 
-### replicas: 3
-
-Definisce il numero di Pod RabbitMQ nel cluster. L'operator crea uno **StatefulSet** con 3 repliche, ognuna con il proprio PersistentVolumeClaim. La scelta di 3 nodi segue la logica del quorum — il cluster rimane operativo anche con 1 nodo non disponibile.
-
-### image
-
-```yaml
-image: docker.io/library/rabbitmq:4.1.3-management
-```
-
-Usa il registry esplicito `docker.io` per lo stesso motivo del fix all'operator — evitare l'errore di risoluzione degli short name. Il tag `-management` include la Management UI integrata.
-
-### resources
-
-```yaml
-resources:
-  requests:
-    cpu: "500m"
-    memory: "1Gi"
-  limits:
-    cpu: "2"
-    memory: "4Gi"
-```
-
-- **requests** — risorse garantite che Kubernetes riserva per ogni Pod
-- **limits** — tetto massimo che ogni Pod può consumare
-- `500m` CPU = mezzo core; `2` CPU = due core interi
-
-### persistence
-
-```yaml
-persistence:
-  storageClassName: ceph-rbd
-  storage: 10Gi
-```
-
-Ogni Pod riceve un **PersistentVolumeClaim** da 10Gi sulla storage class `ceph-rbd` (Ceph RADOS Block Device — lo storage distribuito del cluster aziendale). I dati di RabbitMQ vengono scritti su questo volume e sopravvivono al riavvio dei Pod.
-
-### Service — NodePort
-
-```yaml
-override:
-  service:
-    spec:
-      type: NodePort
-      ports:
-        - name: amqp
-          port: 5672
-          targetPort: 5672
-          nodePort: 30672
-```
-
-Espone la porta AMQP (5672) all'esterno del cluster sulla porta `30672` di ogni nodo worker. Questo permette alle applicazioni esterne al cluster Kubernetes di connettersi a RabbitMQ.
-
-### podAntiAffinity
-
-```yaml
-affinity:
-  podAntiAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      - labelSelector:
-          matchExpressions:
-            - key: app.kubernetes.io/name
-              operator: In
-              values:
-                - trove-rabbitmq
-        topologyKey: kubernetes.io/hostname
-```
-
-Garantisce che i 3 Pod RabbitMQ vengano schedulati su **nodi fisici diversi** del cluster Kubernetes. Se due Pod finissero sullo stesso nodo fisico e quel nodo cadesse, si perderebbero 2 dei 3 nodi RabbitMQ compromettendo il quorum. Con `requiredDuringSchedulingIgnoredDuringExecution` Kubernetes **non schedula** il Pod se non trova un nodo fisico libero — è un vincolo hard, non una preferenza.
-
----
-
-## Verifica del deploy
-
-### Step 1 — Monitora la creazione dei Pod
+### Monitora la creazione dei Pod
 
 ```bash
 kubectl get pods -n trove-messaging -w
 ```
 
-Il flag `-w` (watch) tiene il comando in ascolto e mostra in tempo reale i cambi di stato dei Pod, utile per seguire l'avvio progressivo dei 3 nodi del cluster senza dover rilanciare il comando manualmente.
-
-Output atteso, una volta completato l'avvio:
+Output atteso:
 
 ```
-NAME                     READY   STATUS    RESTARTS   AGE
-trove-rabbitmq-server-0  1/1     Running   0          5m
-trove-rabbitmq-server-1  1/1     Running   0          4m
-trove-rabbitmq-server-2  1/1     Running   0          3m
+NAME                      READY   STATUS    RESTARTS   AGE
+trove-rabbitmq-server-0   1/1     Running   0          5m
+trove-rabbitmq-server-1   1/1     Running   0          4m
+trove-rabbitmq-server-2   1/1     Running   0          3m
 ```
 
-### Step 2 — Verifica generale delle risorse create
+---
+
+### Verifica generale delle risorse create
 
 ```bash
-# Verifica i pod del cluster RabbitMQ
-kubectl get pods -n trove-messaging
-
 # Verifica il cluster RabbitMQ
 kubectl get rabbitmqcluster -n trove-messaging
-
-# Dettagli della risorsa
-kubectl describe rabbitmqcluster trove-rabbitmq -n trove-messaging
 
 # Verifica i PersistentVolumeClaim
 kubectl get pvc -n trove-messaging
@@ -366,28 +163,35 @@ kubectl get pvc -n trove-messaging
 kubectl get svc -n trove-messaging
 ```
 
-### Step 3 — Verifica il cluster
+### Verifica lo stato del cluster RabbitMQ
 
 ```bash
-# Status del cluster
 kubectl exec -n trove-messaging trove-rabbitmq-server-0 -- rabbitmqctl cluster_status
-
-# Credenziali default (generate dall'Operator)
-kubectl get secret -n trove-messaging trove-rabbitmq-default-user -o jsonpath='{.data.username}' | base64 -d
-kubectl get secret -n trove-messaging trove-rabbitmq-default-user -o jsonpath='{.data.password}' | base64 -d
-
-# Management UI (port forward per test)
-kubectl port-forward -n trove-messaging svc/trove-rabbitmq 15672:15672 &
-# Apri http://localhost:15672 con le credenziali sopra
 ```
 
-`rabbitmqctl cluster_status` conferma che i 3 nodi si sono uniti correttamente allo stesso cluster (sezione `Running Nodes`). Le credenziali del secret `trove-rabbitmq-default-user` sono generate automaticamente dall'Operator alla creazione del cluster e permettono un primo accesso di verifica, sia da CLI che dalla Management UI.
+Conferma che i 3 nodi si siano uniti correttamente allo stesso cluster (sezione `Running Nodes`).
+
+### Accedi alla Management UI
+
+```bash
+# Recupera le credenziali generate automaticamente dall'Operator
+kubectl get secret -n trove-messaging trove-rabbitmq-default-user -o jsonpath='{.data.username}' | base64 -d
+echo ""
+kubectl get secret -n trove-messaging trove-rabbitmq-default-user -o jsonpath='{.data.password}' | base64 -d
+echo ""
+
+# Port forward per accedere alla UI
+kubectl port-forward -n trove-messaging svc/trove-rabbitmq 15672:15672
+```
+
+Apri `http://localhost:15672` con le credenziali recuperate.
 
 ---
 
-### Step 4 — Crea vhost e utenti dedicati
 
-L'idea iniziale prevedeva un solo utente applicativo (`trove_guest`) con permessi limitati sul vhost di default `/`, oppure in alternativa un unico vhost dedicato `trove`. In fase di configurazione si è invece optato per un **isolamento**, creando un vhost dedicato — con relativo utente omonimo — per ciascuna sede: `trove-roma` e `trove-milano`. Ogni utente ha permessi completi solo sul proprio vhost, che resta isolato dagli altri.
+## 6. Creazione di vhost e utenti dedicati
+
+Si è optato per un isolamento: un vhost dedicato con relativo utente (`trove-roma` e `trove-milano`). Ogni utente ha permessi completi solo sul proprio vhost, isolato dagli altri.
 
 ```bash
 # Vhost e utente "trove-roma"
@@ -407,8 +211,6 @@ kubectl exec -n trove-messaging trove-rabbitmq-server-0 -- \
   rabbitmqctl set_permissions -p trove-milano trove-milano ".*" ".*" ".*"
 ```
 
----
-
 ### Verifica
 
 ```bash
@@ -420,72 +222,48 @@ Output atteso:
 
 ```
 # list_users
-user                              tags
-default_user_Zcm1ysisBFOvU6KkDur  [administrator]
-trove-roma                        []
-trove-milano                      []
+user                               tags
+default_user_Zcm1ysisBFOvU6KkDur   [administrator]
+trove-roma                         []
+trove-milano                       []
 
 # list_vhosts
 name
+/
 trove-roma
 trove-milano
-/
 ```
 
-L'utente `default_user_...` con tag `[administrator]` è quello generato automaticamente dall'Operator (le stesse credenziali recuperate allo Step 3) e va usato solo per amministrazione, non dalle applicazioni. Il vhost `/` resta quello di default di RabbitMQ, non utilizzato dall'applicazione Trove.
+L'utente `default_user_...` con tag `[administrator]` è generato automaticamente dall'Operator e va usato solo per amministrazione, non dalle applicazioni.
 
 ---
 
-## Esporre RabbitMQ alle VM Trove — la parte di rete
-
-### Il problema
-
-Le VM di Trove si trovano su una rete diversa. RabbitMQ invece gira dentro Kubernetes e ha un indirizzo IP visibile solo all'interno del cluster (ClusterIP). Le VM non riescono a raggiungere quell'indirizzo, perché sono su due reti separate che di norma non comunicano tra loro.
+## 7. Esporre RabbitMQ alle VM Trove
 
 
-### Soluzione - NodePort
-
-La soluzione adottata espone RabbitMQ come `NodePort`, pubblicando la porta AMQP su un IP dei nodi worker K8s, raggiungibile dalle VM:
-
-```yaml
-override:
-    service:
-      spec:
-        type: NodePort
-        ports:
-          - name: amqp
-            port: 5672
-            targetPort: 5672
-            nodePort: 30672
-```
-
-Questa configurazione è già presente nel manifest `rabbitmq-trove-cluster.yaml` riportato in precedenza. Con `type: NodePort`, Kubernetes apre la porta `30672` su **ogni nodo worker** del cluster: una VM Trove può quindi connettersi a RabbitMQ puntando all'IP di un qualsiasi nodo worker sulla porta `30672`, senza dover attraversare la rete overlay di Kubernetes.
-
----
+La configurazione NodePort è già inclusa nel manifest `rabbitmq-trove-cluster.yaml`. Con `type: NodePort`, Kubernetes apre la porta `30672` su ogni nodo worker del cluster: una VM Trove può connettersi a RabbitMQ puntando all'IP di un qualsiasi nodo worker sulla porta `30672`.
 
 ### Verifica del NodePort
-
-Prima di tutto controlla che il Service sia effettivamente di tipo NodePort e su quale porta è stato assegnato:
 
 ```bash
 kubectl get svc -n trove-messaging trove-rabbitmq
 ```
 
-Output atteso (colonna PORT(S) mostra la porta interna e quella NodePort assegnata):
+Output atteso:
 
-```bash
+```
 NAME             TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
 trove-rabbitmq   NodePort   10.96.123.45    <none>        5672:30672/TCP   10m
 ```
 
-Poi recupera l'IP di uno dei nodi worker, che sarà la parte "esterna" dell'endpoint:
+Recupera l'IP di un nodo worker:
 
 ```bash
 kubectl get nodes -o wide
 ```
 
-Dall'output prendi la colonna INTERNAL-IP di uno dei worker di RabbitMQ.
-L'endpoint finale da usare nella connection string delle VM Trove sarà quindi:
-```bash
+L'endpoint da usare nella connection string delle VM Trove sarà:
+
+```
 <IP-NODO-WORKER>:30672
 ```
